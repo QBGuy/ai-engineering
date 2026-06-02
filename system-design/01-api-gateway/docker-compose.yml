@@ -1,0 +1,22 @@
+services:
+  gateway:
+    build: .
+    command: uvicorn app.gateway:app --host 0.0.0.0 --port 8080
+    environment:
+      API_KEYS: dev-key,team-key
+      EMBEDDINGS_URL: http://embeddings-service:8001/internal/embed
+      INFERENCE_URL: http://inference-service:8002/internal/chat
+      REQUEST_TIMEOUT_SECONDS: 5
+    ports:
+      - "8080:8080"
+    depends_on:
+      - embeddings-service
+      - inference-service
+
+  embeddings-service:
+    build: .
+    command: uvicorn app.embeddings_service:app --host 0.0.0.0 --port 8001
+
+  inference-service:
+    build: .
+    command: uvicorn app.inference_service:app --host 0.0.0.0 --port 8002
