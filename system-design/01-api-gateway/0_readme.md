@@ -19,40 +19,44 @@ With a gateway, those concerns sit at the edge and your internal services can st
 
 ## Mental model
 
-Think of the gateway as a programmable reverse proxy:
+Think of the gateway as two cooperating layers: NGINX is the efficient edge reverse proxy, and FastAPI is the programmable application-policy layer.
 
-1. **Receive** the client request.
-2. **Identify** the caller from an API key, JWT, session cookie, or mTLS identity.
-3. **Validate** the request body before forwarding it.
-4. **Apply policy** such as max prompt length, allowed model, tenant quota, or rate-limit check.
-5. **Route** to the correct internal service.
-6. **Normalize** errors and attach observability metadata such as a request id.
-7. **Return** a stable response shape to the caller.
+**Edge** means the outer boundary or layer where traffic from outside enters infrastructure serving your system. Locally, NGINX is the first and only edge component. In production, the edge path might contain DNS, DDoS protection, a CDN, a WAF, and then NGINX. "Edge" describes where a component sits; "reverse proxy" describes what NGINX does.
+
+1. **Receive and protect** the connection at NGINX.
+2. **Apply coarse limits** such as request size and per-IP request rate.
+3. **Forward** the request and tracing headers to FastAPI.
+4. **Identify** the caller from an API key, JWT, session cookie, or mTLS identity.
+5. **Validate and apply policy** using normal application code.
+6. **Route** to the correct internal service.
+7. **Normalize** the response and return it through NGINX.
 
 ## Diagram
 
 ```mermaid
 flowchart LR
-    client[Client app\nBrowser / backend / notebook]
+    client[Client app<br/>Browser / backend / notebook]
 
     subgraph edge[Public edge]
-        gw[API Gateway\nFastAPI service]
+        nginx[NGINX<br/>public reverse proxy]
+        gw[FastAPI<br/>application gateway]
     end
 
     subgraph policy[Gateway responsibilities]
-        auth[Authenticate\nAPI key / JWT]
-        validate[Validate request\nPydantic schema]
-        route[Route request\n/path -> service]
-        observe[Observe\nrequest id + logs]
+        auth[Authenticate<br/>API key / JWT]
+        validate[Validate request<br/>Pydantic schema]
+        route[Route request<br/>/path -> service]
+        observe[Observe<br/>request id + logs]
     end
 
     subgraph internal[Private network]
-        embeddings[Embeddings service\n/vectorize text]
-        inference[Inference service\n/generate answer]
-        future[Future services\nretrieval / billing / evals]
+        embeddings[Embeddings service<br/>/vectorize text]
+        inference[Inference service<br/>/generate answer]
+        future[Future services<br/>retrieval / billing / evals]
     end
 
-    client -->|HTTPS + API key| gw
+    client -->|HTTPS + API key| nginx
+    nginx -->|private proxy request| gw
     gw --> auth --> validate --> route --> observe
     route -->|POST /internal/embed| embeddings
     route -->|POST /internal/chat| inference
@@ -61,11 +65,12 @@ flowchart LR
 
 ## Local architecture in this folder
 
-This module includes a barebones Python/FastAPI implementation with three containers:
+This module includes a barebones NGINX and Python/FastAPI implementation with four containers:
 
 | Container | Purpose | Public? |
 | --- | --- | --- |
-| `gateway` | Receives client traffic, validates API keys, validates payloads, and proxies to internal services. | Yes, on `localhost:8080` |
+| `nginx` | Receives public traffic, applies coarse limits, adds forwarding headers, and proxies to FastAPI. | Yes, on `localhost:8080` |
+| `gateway` | Validates API keys and payloads, applies application policy, and proxies to internal services. | No, Docker network only |
 | `embeddings-service` | Mock internal service that turns text into a deterministic toy embedding. | No, Docker network only |
 | `inference-service` | Mock internal service that returns a deterministic toy answer. | No, Docker network only |
 
@@ -88,7 +93,7 @@ From this folder:
 docker compose up --build
 ```
 
-Then call the gateway:
+Then call NGINX, which forwards the request through the FastAPI gateway:
 
 ```bash
 curl -s http://localhost:8080/health | jq
@@ -110,18 +115,25 @@ curl -s http://localhost:8080/v1/chat/completions \
 
 ## Files
 
-- `architecture.md` explains the request flow and deployment topology in more detail.
+- `0_readme.md` introduces the purpose and mental model.
+- `1_architecture.md` explains the local request flow and responsibility boundaries.
+- `2_architecture_scaled.md` shows the production-style topology with a WAF, NGINX, gateway replicas, and shared state.
+- `2_terminology.md` groups and defines the important networking and gateway terms.
+- `4_detailed_concepts.md` explains upstream pools, connection pools, health checks, failover, and retry safety.
+- `worked-example.ipynb` walks through a request and each rejection layer one cell at a time.
+- `nginx.conf` contains edge proxying, request limits, forwarding headers, and upstream connection settings.
 - `app/gateway.py` contains the gateway and public API.
 - `app/embeddings_service.py` contains a mock embeddings backend.
 - `app/inference_service.py` contains a mock chat backend.
-- `docker-compose.yml` wires the three services together.
+- `docker-compose.yml` wires the four services together.
 - `Dockerfile` and `requirements.txt` build a small reusable Python image for all three services.
 
 ## Where this gets more production-like
 
 This deliberately starts small. In a real deployment, the same architecture can evolve into:
 
-- **Gateway technology:** FastAPI, Kong, Envoy, NGINX, Traefik, Caddy, or an API gateway managed by your cloud provider.
+- **Edge technology:** NGINX, Envoy, Traefik, a Kubernetes ingress, or a managed cloud gateway.
+- **Application gateway:** Keep FastAPI for policy code, or move supported policies into a managed API gateway.
 - **Identity:** API keys in Postgres, OAuth/JWT, WorkOS/Auth0/Clerk, or service-to-service mTLS.
 - **Rate limiting:** Redis-backed token buckets, Upstash Redis free tier, Dragonfly, or Envoy global rate limit service.
 - **Observability:** OpenTelemetry traces, Prometheus metrics, structured logs, and request ids.
@@ -129,4 +141,4 @@ This deliberately starts small. In a real deployment, the same architecture can 
 
 ## Key takeaway
 
-The API gateway is not the model. It is the **traffic control and policy layer** that keeps model-facing systems safer, more observable, and easier to change.
+The API gateway is not the model. NGINX provides the **traffic-control edge**, while FastAPI provides the **programmable policy layer** that keeps model-facing systems safer, more observable, and easier to change.

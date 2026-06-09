@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import uuid4
 
@@ -21,7 +22,16 @@ EMBEDDINGS_URL = os.getenv("EMBEDDINGS_URL", "http://localhost:8001/internal/emb
 INFERENCE_URL = os.getenv("INFERENCE_URL", "http://localhost:8002/internal/chat")
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "5"))
 
-app = FastAPI(title="Barebones AI API Gateway", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    timeout = httpx.Timeout(REQUEST_TIMEOUT_SECONDS)
+    app.state.http_client = httpx.AsyncClient(timeout=timeout)
+    yield
+    await app.state.http_client.aclose()
+
+
+app = FastAPI(title="Barebones AI API Gateway", version="0.2.0", lifespan=lifespan)
 
 
 def authenticate(api_key: str | None) -> str:
@@ -37,15 +47,13 @@ def request_id_from(request: Request) -> str:
     return request.headers.get("X-Request-ID", str(uuid4()))
 
 
-async def post_json(url: str, payload: dict, request_id: str) -> dict:
+async def post_json(request: Request, url: str, payload: dict, request_id: str) -> dict:
     headers = {"X-Request-ID": request_id}
-    timeout = httpx.Timeout(REQUEST_TIMEOUT_SECONDS)
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
-            return response.json()
+        response = await request.app.state.http_client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
     except httpx.TimeoutException as exc:
         raise HTTPException(status_code=504, detail="Downstream service timed out") from exc
     except httpx.HTTPStatusError as exc:
@@ -75,6 +83,7 @@ async def create_embedding(
     request_id = request_id_from(request)
 
     downstream = await post_json(
+        request,
         EMBEDDINGS_URL,
         {"input": body.input},
         request_id=request_id,
@@ -97,6 +106,7 @@ async def create_chat_completion(
     request_id = request_id_from(request)
 
     downstream = await post_json(
+        request,
         INFERENCE_URL,
         {"message": body.message, "model": body.model},
         request_id=request_id,
