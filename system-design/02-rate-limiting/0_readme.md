@@ -31,14 +31,47 @@ This example uses two cooperating layers:
 5. **Rejected requests receive `429 Too Many Requests` and a `Retry-After` hint.**
 
 ```mermaid
-flowchart LR
-    client[Client] -->|API key + prompt| nginx[NGINX<br/>per-IP limit]
-    nginx --> gateway[FastAPI<br/>identify tenant + estimate cost]
-    gateway --> redis[(Redis<br/>request + token buckets)]
+%%{init: {
+    "theme": "base",
+    "themeVariables": {
+        "fontFamily": "Geist, ui-sans-serif, system-ui, sans-serif",
+        "fontSize": "14px",
+        "background": "#0b1220",
+        "lineColor": "#64748b",
+        "textColor": "#e5edf7",
+        "primaryTextColor": "#e5edf7",
+        "edgeLabelBackground": "#0b1220"
+    },
+    "flowchart": {
+        "curve": "basis",
+        "htmlLabels": true,
+        "nodeSpacing": 34,
+        "rankSpacing": 58,
+        "padding": 18
+    }
+}}%%
+flowchart TB
+    client("<b>Client</b><br/>API key + prompt") --> nginx("<b>NGINX</b><br/>coarse per-IP limit")
+    nginx --> gateway("<b>FastAPI gateway</b><br/>identify tenant + estimate cost")
+    gateway --> redis("<b>Redis</b><br/>request + token buckets")
     redis -->|allowed| gateway
-    gateway --> inference[Mock inference service]
+    gateway --> inference("<b>Mock inference service</b><br/>expensive model work")
     redis -->|rejected + retry delay| gateway
     gateway -->|429| client
+
+    classDef defaultNode fill:#182235,stroke:#64748b,stroke-width:1.5px,color:#e5edf7
+    classDef edgeNode fill:#132340,stroke:#60a5fa,stroke-width:1.75px,color:#dbeafe
+    classDef focusNode fill:#2563eb,stroke:#93c5fd,stroke-width:2px,color:#ffffff
+    classDef stateNode fill:#111827,stroke:#60a5fa,stroke-width:1.5px,color:#dbeafe
+
+    class client,inference defaultNode
+    class nginx edgeNode
+    class gateway focusNode
+    class redis stateNode
+
+    linkStyle 0,1,2 stroke:#60a5fa,stroke-width:2.5px,color:#bfdbfe
+    linkStyle 3,4 stroke:#64748b,stroke-width:1.5px,color:#cbd5e1
+    linkStyle 5,6 stroke:#64748b,stroke-width:1.5px,stroke-dasharray:5 4,color:#94a3b8
 ```
 
 ## Local policies

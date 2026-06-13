@@ -33,26 +33,52 @@ Think of the gateway as two cooperating layers: NGINX is the efficient edge reve
 
 ## Diagram
 
+**Layers:** Public edge → Gateway responsibilities → Private network
+
 ```mermaid
-flowchart LR
-    client[Client app<br/>Browser / backend / notebook]
+%%{init: {
+    "theme": "base",
+    "themeVariables": {
+        "fontFamily": "Geist, ui-sans-serif, system-ui, sans-serif",
+        "fontSize": "14px",
+        "background": "#0b1220",
+        "lineColor": "#64748b",
+        "textColor": "#e5edf7",
+        "primaryTextColor": "#e5edf7",
+        "edgeLabelBackground": "#0b1220",
+        "clusterBkg": "#111827",
+        "clusterBorder": "#334155"
+    },
+    "flowchart": {
+        "curve": "basis",
+        "htmlLabels": true,
+        "nodeSpacing": 28,
+        "rankSpacing": 52,
+        "padding": 16
+    }
+}}%%
+flowchart TB
+    client("<b>Client app</b><br/>Browser / backend / notebook")
 
-    subgraph edge[Public edge]
-        nginx[NGINX<br/>public reverse proxy]
-        gw[FastAPI<br/>application gateway]
+    subgraph edge[" "]
+        direction LR
+        nginx("<b>NGINX</b><br/>public reverse proxy")
+        gw("<b>FastAPI</b><br/>application gateway")
     end
 
-    subgraph policy[Gateway responsibilities]
-        auth[Authenticate<br/>API key / JWT]
-        validate[Validate request<br/>Pydantic schema]
-        route[Route request<br/>/path -> service]
-        observe[Observe<br/>request id + logs]
+    subgraph policy[" "]
+        direction LR
+        auth("<b>Authenticate</b><br/>API key / JWT")
+        validate("<b>Validate request</b><br/>Pydantic schema")
+        route("<b>Route request</b><br/>/path → service")
+        observe("<b>Observe</b><br/>request id + logs")
     end
 
-    subgraph internal[Private network]
-        embeddings[Embeddings service<br/>/vectorize text]
-        inference[Inference service<br/>/generate answer]
-        future[Future services<br/>retrieval / billing / evals]
+    subgraph internal[" "]
+        direction LR
+        embeddings("<b>Embeddings service</b><br/>/vectorize text")
+        inference("<b>Inference service</b><br/>/generate answer")
+        future("<b>Future services</b><br/>retrieval / billing / evals")
     end
 
     client -->|HTTPS + API key| nginx
@@ -61,6 +87,28 @@ flowchart LR
     route -->|POST /internal/embed| embeddings
     route -->|POST /internal/chat| inference
     route -. add later .-> future
+
+    classDef client fill:#182235,stroke:#64748b,stroke-width:1.5px,color:#e5edf7
+    classDef edgeNode fill:#132340,stroke:#60a5fa,stroke-width:1.75px,color:#dbeafe
+    classDef policyNode fill:#182235,stroke:#64748b,stroke-width:1.5px,color:#e5edf7
+    classDef routeNode fill:#2563eb,stroke:#93c5fd,stroke-width:2px,color:#ffffff
+    classDef serviceNode fill:#182235,stroke:#64748b,stroke-width:1.5px,color:#e5edf7
+    classDef futureNode fill:#111827,stroke:#64748b,stroke-width:1.5px,stroke-dasharray:5 4,color:#94a3b8
+
+    class client client
+    class nginx,gw edgeNode
+    class auth,validate,observe policyNode
+    class route routeNode
+    class embeddings,inference serviceNode
+    class future futureNode
+
+    style edge fill:#0f1d35,stroke:#315a91,stroke-width:1.5px
+    style policy fill:#111827,stroke:#334155,stroke-width:1.5px
+    style internal fill:#111827,stroke:#334155,stroke-width:1.5px
+
+    linkStyle 0,1,2 stroke:#60a5fa,stroke-width:2.5px,color:#bfdbfe
+    linkStyle 3,4,5,6,7 stroke:#64748b,stroke-width:1.5px,color:#cbd5e1
+    linkStyle 8 stroke:#64748b,stroke-width:1.5px,color:#94a3b8
 ```
 
 ## Local architecture in this folder

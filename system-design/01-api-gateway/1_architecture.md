@@ -12,6 +12,41 @@ Here, **edge** means the outer boundary or layer where external traffic enters i
 ## Request flow
 
 ```mermaid
+%%{init: {
+    "theme": "base",
+    "themeVariables": {
+        "fontFamily": "Geist, ui-sans-serif, system-ui, sans-serif",
+        "fontSize": "14px",
+        "background": "#0b1220",
+        "primaryColor": "#182235",
+        "primaryBorderColor": "#64748b",
+        "primaryTextColor": "#e5edf7",
+        "lineColor": "#64748b",
+        "actorBkg": "#182235",
+        "actorBorder": "#64748b",
+        "actorTextColor": "#e5edf7",
+        "actorLineColor": "#475569",
+        "signalColor": "#60a5fa",
+        "signalTextColor": "#94a3b8",
+        "labelBoxBkgColor": "#132340",
+        "labelBoxBorderColor": "#60a5fa",
+        "labelTextColor": "#dbeafe",
+        "loopTextColor": "#94a3b8",
+        "activationBkgColor": "#132340",
+        "activationBorderColor": "#60a5fa",
+        "noteBkgColor": "#111827",
+        "noteBorderColor": "#334155",
+        "noteTextColor": "#e5edf7"
+    },
+    "sequence": {
+        "diagramMarginX": 24,
+        "diagramMarginY": 16,
+        "actorMargin": 48,
+        "width": 170,
+        "height": 54,
+        "messageMargin": 16
+    }
+}}%%
 sequenceDiagram
     participant C as Client
     participant N as NGINX Edge
@@ -38,24 +73,62 @@ sequenceDiagram
 
 ## Local deployment topology
 
-```mermaid
-flowchart LR
-    client[Client]
+**Layers:** Public edge → Docker network only
 
-    subgraph public[Public edge]
-        nginx[NGINX<br/>localhost:8080]
+```mermaid
+%%{init: {
+    "theme": "base",
+    "themeVariables": {
+        "fontFamily": "Geist, ui-sans-serif, system-ui, sans-serif",
+        "fontSize": "14px",
+        "background": "#0b1220",
+        "lineColor": "#64748b",
+        "textColor": "#e5edf7",
+        "primaryTextColor": "#e5edf7",
+        "edgeLabelBackground": "#0b1220",
+        "clusterBkg": "#111827",
+        "clusterBorder": "#334155"
+    },
+    "flowchart": {
+        "curve": "bumpX",
+        "htmlLabels": true,
+        "nodeSpacing": 36,
+        "rankSpacing": 58,
+        "padding": 18
+    }
+}}%%
+flowchart TB
+    client("<b>Client</b><br/>public caller")
+
+    subgraph public[" "]
+        nginx("<b>NGINX</b><br/>localhost:8080")
     end
 
-    subgraph private[Docker network only]
-        gateway[FastAPI Gateway<br/>gateway:8080]
-        embed[Embeddings Service<br/>embeddings-service:8001]
-        infer[Inference Service<br/>inference-service:8002]
+    subgraph private[" "]
+        gateway("<b>FastAPI gateway</b><br/>gateway:8080")
+        embed("<b>Embeddings service</b><br/>embeddings-service:8001")
+        infer("<b>Inference service</b><br/>inference-service:8002")
     end
 
     client -->|HTTP| nginx
     nginx -->|proxy_pass| gateway
     gateway --> embed
     gateway --> infer
+
+    classDef defaultNode fill:#182235,stroke:#64748b,stroke-width:1.5px,color:#e5edf7
+    classDef edgeNode fill:#132340,stroke:#60a5fa,stroke-width:1.75px,color:#dbeafe
+    classDef focusNode fill:#2563eb,stroke:#93c5fd,stroke-width:2px,color:#ffffff
+
+    class client defaultNode
+    class nginx edgeNode
+    class gateway focusNode
+    class embed,infer defaultNode
+
+    style public fill:#0f1d35,stroke:#315a91,stroke-width:1.5px
+    style private fill:#111827,stroke:#334155,stroke-width:1.5px
+
+    linkStyle 0,1 stroke:#60a5fa,stroke-width:2.5px,color:#bfdbfe
+    linkStyle 2,3 stroke:#64748b,stroke-width:1.5px,color:#cbd5e1
 ```
 
 Only NGINX publishes a host port. The FastAPI gateway and backend services are reachable only inside the Docker network.

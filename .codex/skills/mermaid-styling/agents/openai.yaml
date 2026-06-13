@@ -1,0 +1,5 @@
+interface:
+  display_name: "Mermaid Styling"
+  short_description: "Create polished, readable Mermaid diagrams"
+  brand_color: "#60A5FA"
+  default_prompt: "Use $mermaid-styling to create or improve a Mermaid diagram for this repository."

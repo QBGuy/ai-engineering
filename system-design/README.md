@@ -51,6 +51,27 @@ Each module follows the same progression where the material is useful:
 The seven modules eventually combine into one production request path:
 
 ```mermaid
+%%{init: {
+    "theme": "base",
+    "themeVariables": {
+        "fontFamily": "Geist, ui-sans-serif, system-ui, sans-serif",
+        "fontSize": "14px",
+        "background": "#0b1220",
+        "lineColor": "#64748b",
+        "textColor": "#e5edf7",
+        "primaryTextColor": "#e5edf7",
+        "edgeLabelBackground": "#0b1220",
+        "clusterBkg": "#111827",
+        "clusterBorder": "#334155"
+    },
+    "flowchart": {
+        "curve": "basis",
+        "htmlLabels": true,
+        "nodeSpacing": 28,
+        "rankSpacing": 52,
+        "padding": 16
+    }
+}}%%
 flowchart LR
     client[Client] --> gateway[API gateway]
     gateway --> limiter[Rate limiter]

@@ -6,70 +6,107 @@ The main scaling idea is simple: run multiple stateless FastAPI gateway replicas
 
 ## Topology
 
+**Layers:** Public entry → Edge proxy replicas → Gateway replicas → Shared state and private services
+
 ```mermaid
+%%{init: {
+    "theme": "base",
+    "themeVariables": {
+        "fontFamily": "Geist, ui-sans-serif, system-ui, sans-serif",
+        "fontSize": "14px",
+        "background": "#0b1220",
+        "lineColor": "#64748b",
+        "textColor": "#e5edf7",
+        "primaryTextColor": "#e5edf7",
+        "edgeLabelBackground": "#0b1220",
+        "clusterBkg": "#111827",
+        "clusterBorder": "#334155"
+    },
+    "flowchart": {
+        "curve": "basis",
+        "htmlLabels": true,
+        "nodeSpacing": 30,
+        "rankSpacing": 58,
+        "padding": 18
+    }
+}}%%
 flowchart TB
-    users((Users))
-    dns[DNS]
-    waf[Managed edge / WAF<br/>distributes traffic]
+    users("<b>Users</b><br/>public clients")
+    dns("<b>DNS</b><br/>api.example.com")
+    waf("<b>Managed edge / WAF</b><br/>filters and distributes traffic")
 
-    subgraph proxy[NGINX edge proxy replicas]
-        n1[NGINX 1]
-        n2[NGINX 2]
+    subgraph proxy[" "]
+        direction LR
+        n1("<b>NGINX 1</b><br/>edge proxy")
+        n2("<b>NGINX 2</b><br/>edge proxy")
     end
 
-    subgraph gateways[Private FastAPI gateway replicas]
-        g1[Gateway 1]
-        g2[Gateway 2]
-        g3[Gateway 3]
+    subgraph gateways[" "]
+        direction LR
+        g1("<b>Gateway 1</b><br/>stateless")
+        g2("<b>Gateway 2</b><br/>stateless")
+        g3("<b>Gateway 3</b><br/>stateless")
     end
 
-    subgraph state[State]
-        auth[(Auth DB)]
-        redis[(Redis)]
+    balance("<b>Load balance</b><br/>across healthy gateways")
+    fanout("<b>Each gateway replica</b><br/>connects independently")
+
+    subgraph state[" "]
+        direction LR
+        auth("<b>Auth DB</b><br/>identity and permissions")
+        redis("<b>Redis</b><br/>shared fast state")
     end
 
-    subgraph services[Services]
-        embed[Embeddings]
-        infer[Inference]
-        retrieval[Retrieval]
+    subgraph services[" "]
+        direction LR
+        embed("<b>Embeddings</b><br/>vectorization")
+        infer("<b>Inference</b><br/>model execution")
+        retrieval("<b>Retrieval</b><br/>search and RAG")
     end
 
-    obs[Observability]
+    obs("<b>Observability</b><br/>logs, metrics, and traces")
 
     users --> dns --> waf
     waf --> n1
     waf --> n2
 
-    n1 --> g1
-    n1 --> g2
-    n1 --> g3
-    n2 --> g1
-    n2 --> g2
-    n2 --> g3
+    n1 --> balance
+    n2 --> balance
+    balance --> g1
+    balance --> g2
+    balance --> g3
 
-    g1 --> auth
-    g2 --> auth
-    g3 --> auth
+    g1 --> fanout
+    g2 --> fanout
+    g3 --> fanout
 
-    g1 --> redis
-    g2 --> redis
-    g3 --> redis
+    fanout --> auth
+    fanout --> redis
+    fanout --> embed
+    fanout --> infer
+    fanout --> retrieval
+    fanout -.-> obs
 
-    g1 --> embed
-    g1 --> infer
-    g1 --> retrieval
+    classDef entryNode fill:#182235,stroke:#64748b,stroke-width:1.5px,color:#e5edf7
+    classDef edgeNode fill:#132340,stroke:#60a5fa,stroke-width:1.75px,color:#dbeafe
+    classDef gatewayNode fill:#2563eb,stroke:#93c5fd,stroke-width:2px,color:#ffffff
+    classDef supportNode fill:#182235,stroke:#64748b,stroke-width:1.5px,color:#e5edf7
+    classDef conceptNode fill:#111827,stroke:#60a5fa,stroke-width:1.5px,stroke-dasharray:5 4,color:#bfdbfe
+    classDef observeNode fill:#111827,stroke:#64748b,stroke-width:1.5px,stroke-dasharray:5 4,color:#94a3b8
 
-    g2 --> embed
-    g2 --> infer
-    g2 --> retrieval
+    class users,dns entryNode
+    class waf,n1,n2 edgeNode
+    class g1,g2,g3 gatewayNode
+    class balance,fanout conceptNode
+    class auth,redis,embed,infer,retrieval supportNode
+    class obs observeNode
 
-    g3 --> embed
-    g3 --> infer
-    g3 --> retrieval
+    style proxy fill:#0f1d35,stroke:#315a91,stroke-width:1.5px
+    style gateways fill:#111827,stroke:#334155,stroke-width:1.5px
+    style state fill:#111827,stroke:#334155,stroke-width:1.5px
+    style services fill:#111827,stroke:#334155,stroke-width:1.5px
 
-    g1 -.-> obs
-    g2 -.-> obs
-    g3 -.-> obs
+    linkStyle 0,1,2,3 stroke:#60a5fa,stroke-width:2.5px,color:#bfdbfe
 ```
 
 ## Components

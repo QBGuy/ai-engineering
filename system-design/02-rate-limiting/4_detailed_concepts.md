@@ -56,6 +56,10 @@ Both gateways spent the same final unit. The Lua script executes inside Redis as
 
 ## 5. What the Redis state looks like
 
+Redis is an in-memory key-value store that runs as a separate server process. Think of it as a shared dictionary that all gateway replicas can read and write simultaneously. Because it lives in RAM rather than on disk, reads and writes are very fast — typically under a millisecond.
+
+The gateway connects to it via a URL (`redis://localhost:6379/0`). In production, Redis runs on a dedicated host or managed service; locally it is usually a Docker container.
+
 Redis does not store one row for every accepted request in this example. It stores the **current state of each enforced bucket**.
 
 ```text
@@ -76,6 +80,10 @@ rate_limit:tenant:tenant-dev:tokens
 ```
 
 `tokens` means remaining bucket capacity at the last update, not historical model-token usage. `updated_at` allows the next request to calculate how much capacity has refilled since then.
+
+Redis has several data types (string, list, set, sorted set, hash). A hash stores multiple named fields under one key, similar to a small row in a table. Using a hash here groups `tokens` and `updated_at` together so both fields can be read in a single `HMGET` call rather than two separate lookups.
+
+Each bucket hash is approximately 200–300 bytes. Ten thousand tenants with two buckets each is around 3–5 MB — negligible. Redis itself idles at roughly 5–10 MB of process overhead. Inactive keys also auto-delete via TTL, so tenants who stop sending requests do not accumulate state indefinitely.
 
 You can inspect the local example with:
 
@@ -171,6 +179,8 @@ org-3 token bucket:   -300
 If any required bucket lacks capacity, the request is rejected and none of the buckets should be deducted. This prevents partial charging when, for example, the user still has capacity but the organization-wide allowance is exhausted.
 
 Every extra dimension combination creates more keys and more checks. Only create buckets for limits the system genuinely enforces.
+
+The hierarchy mapping itself (which user belongs to which team, which team belongs to which organisation) does not live in Redis. Redis only stores the bucket state. The application layer — Python code, a database, or a config file — defines the membership and decides which bucket keys to include in each atomic check. Redis is dumb storage; the structure is in your application.
 
 ## 7. Lazy replenishment
 

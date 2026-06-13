@@ -3,6 +3,38 @@
 ## Request flow
 
 ```mermaid
+%%{init: {
+    "theme": "base",
+    "themeVariables": {
+        "fontFamily": "Geist, ui-sans-serif, system-ui, sans-serif",
+        "fontSize": "14px",
+        "background": "#0b1220",
+        "primaryColor": "#182235",
+        "primaryBorderColor": "#64748b",
+        "primaryTextColor": "#e5edf7",
+        "lineColor": "#64748b",
+        "actorBkg": "#182235",
+        "actorBorder": "#64748b",
+        "actorTextColor": "#e5edf7",
+        "actorLineColor": "#475569",
+        "signalColor": "#60a5fa",
+        "signalTextColor": "#94a3b8",
+        "labelBoxBkgColor": "#132340",
+        "labelBoxBorderColor": "#60a5fa",
+        "labelTextColor": "#dbeafe",
+        "loopTextColor": "#94a3b8",
+        "activationBkgColor": "#132340",
+        "activationBorderColor": "#60a5fa"
+    },
+    "sequence": {
+        "diagramMarginX": 24,
+        "diagramMarginY": 16,
+        "actorMargin": 48,
+        "width": 170,
+        "height": 54,
+        "messageMargin": 32
+    }
+}}%%
 sequenceDiagram
     participant C as Client
     participant N as NGINX Edge
@@ -28,23 +60,63 @@ sequenceDiagram
 
 ## Local deployment topology
 
-```mermaid
-flowchart LR
-    client[Client]
+**Layers:** Public edge → Docker network only
 
-    subgraph public[Public edge]
-        nginx[NGINX<br/>localhost:8081]
+```mermaid
+%%{init: {
+    "theme": "base",
+    "themeVariables": {
+        "fontFamily": "Geist, ui-sans-serif, system-ui, sans-serif",
+        "fontSize": "14px",
+        "background": "#0b1220",
+        "lineColor": "#64748b",
+        "textColor": "#e5edf7",
+        "primaryTextColor": "#e5edf7",
+        "edgeLabelBackground": "#0b1220",
+        "clusterBkg": "#111827",
+        "clusterBorder": "#334155"
+    },
+    "flowchart": {
+        "curve": "bumpX",
+        "htmlLabels": true,
+        "nodeSpacing": 36,
+        "rankSpacing": 58,
+        "padding": 18
+    }
+}}%%
+flowchart TB
+    client("<b>Client</b><br/>public caller")
+
+    subgraph public[" "]
+        nginx("<b>NGINX</b><br/>localhost:8081")
     end
 
-    subgraph private[Docker network only]
-        gateway[FastAPI Gateway<br/>policy enforcement]
-        redis[(Redis<br/>shared bucket state)]
-        inference[Mock Inference Service<br/>expensive work]
+    subgraph private[" "]
+        gateway("<b>FastAPI gateway</b><br/>policy enforcement")
+        redis("<b>Redis</b><br/>shared bucket state")
+        inference("<b>Mock inference service</b><br/>expensive work")
     end
 
     client --> nginx --> gateway
     gateway --> redis
     gateway -->|only when allowed| inference
+
+    classDef defaultNode fill:#182235,stroke:#64748b,stroke-width:1.5px,color:#e5edf7
+    classDef edgeNode fill:#132340,stroke:#60a5fa,stroke-width:1.75px,color:#dbeafe
+    classDef focusNode fill:#2563eb,stroke:#93c5fd,stroke-width:2px,color:#ffffff
+    classDef stateNode fill:#111827,stroke:#60a5fa,stroke-width:1.5px,color:#dbeafe
+
+    class client,inference defaultNode
+    class nginx edgeNode
+    class gateway focusNode
+    class redis stateNode
+
+    style public fill:#0f1d35,stroke:#315a91,stroke-width:1.5px
+    style private fill:#111827,stroke:#334155,stroke-width:1.5px
+
+    linkStyle 0,1 stroke:#60a5fa,stroke-width:2.5px,color:#bfdbfe
+    linkStyle 2 stroke:#64748b,stroke-width:1.5px,color:#cbd5e1
+    linkStyle 3 stroke:#64748b,stroke-width:1.5px,color:#cbd5e1
 ```
 
 Only NGINX publishes a host port. Redis, the gateway, and the inference service remain private.

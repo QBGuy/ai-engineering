@@ -2,24 +2,80 @@
 
 The local example has one gateway and one Redis instance. At production scale, rate limiting becomes a consistency, latency, and product-policy problem.
 
+**Layers:** Public entry → Global routing → Regional enforcement → Model capacity and durable control systems
+
 ```mermaid
+%%{init: {
+    "theme": "base",
+    "themeVariables": {
+        "fontFamily": "Geist, ui-sans-serif, system-ui, sans-serif",
+        "fontSize": "14px",
+        "background": "#0b1220",
+        "lineColor": "#64748b",
+        "textColor": "#e5edf7",
+        "primaryTextColor": "#e5edf7",
+        "edgeLabelBackground": "#0b1220",
+        "clusterBkg": "#111827",
+        "clusterBorder": "#334155"
+    },
+    "flowchart": {
+        "curve": "basis",
+        "htmlLabels": true,
+        "nodeSpacing": 34,
+        "rankSpacing": 62,
+        "padding": 18
+    }
+}}%%
 flowchart TB
-    clients[Clients] --> edge[CDN / WAF / edge limits]
-    edge --> router[Global traffic routing]
+    clients("<b>Clients</b><br/>public callers") --> edge("<b>CDN / WAF</b><br/>coarse edge limits")
+    edge --> router("<b>Global traffic routing</b><br/>selects a healthy region")
 
-    router --> regionA[Region A gateways]
-    router --> regionB[Region B gateways]
+    subgraph regions[" "]
+        direction LR
+        regionA("<b>Region A gateways</b><br/>tenant-aware enforcement")
+        regionB("<b>Region B gateways</b><br/>tenant-aware enforcement")
+    end
 
-    regionA --> redisA[(Regional Redis)]
-    regionB --> redisB[(Regional Redis)]
+    subgraph fastState[" "]
+        direction LR
+        redisA("<b>Regional Redis A</b><br/>short-lived limiter state")
+        redisB("<b>Regional Redis B</b><br/>short-lived limiter state")
+    end
 
-    regionA --> provider[Model provider / GPU fleet]
+    provider("<b>Model provider / GPU fleet</b><br/>protected expensive capacity")
+    control("<b>Policy service</b><br/>plans, quotas, and overrides")
+    usage("<b>Usage ledger</b><br/>billing, audit, and reconciliation")
+
+    router --> regionA
+    router --> regionB
+
+    regionA --> redisA
+    regionB --> redisB
+
+    regionA --> provider
     regionB --> provider
 
-    control[Policy service<br/>plans / quotas / overrides] -. publishes policy .-> regionA
+    control -. publishes policy .-> regionA
     control -. publishes policy .-> regionB
-    usage[Usage ledger<br/>billing / audit / reconciliation] <-. async usage events .-> regionA
+    usage <-. async usage events .-> regionA
     usage <-. async usage events .-> regionB
+
+    classDef entryNode fill:#182235,stroke:#64748b,stroke-width:1.5px,color:#e5edf7
+    classDef edgeNode fill:#132340,stroke:#60a5fa,stroke-width:1.75px,color:#dbeafe
+    classDef regionNode fill:#2563eb,stroke:#93c5fd,stroke-width:2px,color:#ffffff
+    classDef supportNode fill:#182235,stroke:#64748b,stroke-width:1.5px,color:#e5edf7
+    classDef asyncNode fill:#111827,stroke:#64748b,stroke-width:1.5px,stroke-dasharray:5 4,color:#94a3b8
+
+    class clients entryNode
+    class edge,router edgeNode
+    class regionA,regionB regionNode
+    class redisA,redisB,provider supportNode
+    class control,usage asyncNode
+
+    style regions fill:#111827,stroke:#334155,stroke-width:1.5px
+    style fastState fill:#111827,stroke:#334155,stroke-width:1.5px
+
+    linkStyle 0,1,2,3 stroke:#60a5fa,stroke-width:2.5px,color:#bfdbfe
 ```
 
 ## Separate fast enforcement from durable accounting
