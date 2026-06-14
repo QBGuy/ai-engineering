@@ -135,22 +135,12 @@ Only NGINX publishes a host port. The FastAPI gateway and backend services are r
 
 ## Responsibility boundary
 
-| Concern | NGINX edge | FastAPI gateway |
-| --- | --- | --- |
-| Public listener | Yes | No |
-| TLS termination in production | Yes | No |
-| Connection and keep-alive handling | Yes | No |
-| Request body-size limit | Yes | Optional second check |
-| Coarse per-IP rate limit | Yes | No |
-| Load balancing gateway replicas | Yes | No |
-| API key or JWT authentication | No | Yes |
-| Tenant and model authorization | No | Yes |
-| JSON schema validation | No | Yes |
-| Route to application services | No | Yes |
-| Normalize API responses | No | Yes |
-| Token quotas and billing policy | No | Yes, usually with shared state |
+| Component | Owns |
+| --- | --- |
+| **NGINX edge** | Public listener, TLS, connection handling, per-IP rate limit, load balancing |
+| **FastAPI gateway** | API key auth, JSON validation, routing, response normalization, billing policy |
 
-NGINX rejects clearly invalid or excessive traffic before it consumes a Python worker. FastAPI performs checks that require understanding the caller or request body.
+NGINX rejects clearly invalid or excessive traffic before it reaches Python. FastAPI handles anything that requires understanding the caller or request body.
 
 ## Connections and upstreams
 

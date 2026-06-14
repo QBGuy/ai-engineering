@@ -123,15 +123,11 @@ Only NGINX publishes a host port. Redis, the gateway, and the inference service 
 
 ## Responsibility boundary
 
-| Concern | NGINX edge | FastAPI gateway | Redis |
-| --- | --- | --- | --- |
-| Cheap per-IP flood protection | Yes | No | No |
-| Authenticate API key and identify tenant | No | Yes | No |
-| Estimate AI request cost | No | Yes | No |
-| Store shared limiter state | No | No | Yes |
-| Make an atomic multi-bucket decision | No | Initiates | Executes |
-| Return tenant-aware limit headers | No | Yes | No |
-| Protect downstream inference work | Indirectly | Yes | No |
+| Component | Owns |
+| --- | --- |
+| **NGINX edge** | Coarse per-IP flood protection before any Python runs |
+| **FastAPI gateway** | Auth, token cost estimation, limit header responses |
+| **Redis** | Shared bucket state; executes the atomic allow/reject decision |
 
 ## Why two limiting layers?
 

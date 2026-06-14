@@ -1,3 +1,3 @@
-# Message Queues
+# 04 - Message Queues
 
-Placeholder for this concept. We will fill this in when we reach this step in the learning path.
+See [0_readme.md](0_readme.md) for the full module overview, architecture, and run instructions.

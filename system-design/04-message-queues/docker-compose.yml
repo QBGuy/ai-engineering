@@ -1,0 +1,42 @@
+services:
+  api:
+    build: .
+    command: uvicorn app.api:app --host 0.0.0.0 --port 8080
+    ports:
+      - "8082:8080"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      JOB_TTL: "3600"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: python -m app.worker
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      LLM_LATENCY_MS: "2000"
+      JOB_TTL: "3600"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7.4-alpine
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
