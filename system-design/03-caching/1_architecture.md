@@ -66,6 +66,42 @@ sequenceDiagram
 
 Redis handles exact lookups (O(1) key-value). The vector DB handles semantic search — Redis cannot compute similarity over stored vectors without the RediSearch module.
 
+## Where embedding caching fits in practice
+
+This module caches embeddings. In practice, embedding caching is not the first place teams reach for.
+
+| Cache target | Latency saved | Cost saved | Implementation |
+| --- | ---: | --- | --- |
+| **Full LLM response** | 5–30 s | High (skips retrieval + generation) | Redis key on semantic query hash; GPTCache |
+| **Retrieved chunks** | 1–3 s | Medium (skips vector search) | Redis key on embedding hash → chunk list |
+| **Provider prefix cache** | 0 s (handled for you) | High (50–90% on repeated prefixes) | Add `cache_control` to Anthropic messages; OpenAI implicit |
+| **Query embedding** | 50–500 ms | Low (cheap API, fast model) | This module |
+| **Document embedding** | Minutes at index time | High for large corpora | Skip re-embedding unchanged documents |
+
+**Full response caching** short-circuits the entire pipeline in one hit. If the same question returns the same answer regardless of who asks it or when, cache the answer — not the intermediate embedding.
+
+**Provider prefix caching** is the lowest-effort win. Anthropic and OpenAI both cache repeated prompt prefixes server-side. A RAG system that prepends a large system prompt or document block to every request gets 50–90 % token cost reduction with a one-line config change and no infrastructure.
+
+```python
+# Anthropic prompt caching — mark the expensive prefix
+messages = [{
+    "role": "user",
+    "content": [
+        {
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},  # ← cached server-side for 5 min
+        },
+        {"type": "text", "text": user_query},
+    ],
+}]
+```
+
+**Embedding caching** makes the most sense when:
+- Query repetition is high (support bots, public FAQs, autocomplete)
+- You are re-embedding the same document corpus repeatedly and want to skip unchanged files
+- You have already implemented full response caching and want to squeeze out additional savings on misses
+
 ## Why two cache levels?
 
 A single exact-match cache handles repeated identical queries. For a support chatbot or search interface, many users ask the same intent with different words. Semantic matching extends coverage to near-duplicates without another API call.
