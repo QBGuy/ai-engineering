@@ -1,0 +1,56 @@
+services:
+  gateway:
+    build: .
+    command: uvicorn app.gateway:app --host 0.0.0.0 --port 8080
+    ports:
+      - "8081:8080"
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      EMBEDDING_URL: http://embedding-service:8002/internal/embed
+      CACHE_TTL: 3600
+      SEMANTIC_THRESHOLD: "0.97"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      embedding-service:
+        condition: service_started
+
+  embedding-service:
+    build: .
+    command: uvicorn app.embedding_service:app --host 0.0.0.0 --port 8002
+    environment:
+      EMBEDDING_LATENCY_MS: "500"
+    expose:
+      - "8002"
+
+  redis:
+    image: redis:7.4-alpine
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.4
+    expose:
+      - "6333"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:6333/healthz"]
+      interval: 5s
+      timeout: 2s
+      retries: 10

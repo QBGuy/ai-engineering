@@ -1,0 +1,129 @@
+# 03 - Caching for RAG Systems
+
+Caching stores computed results so repeated requests skip redundant work. For RAG pipelines, the embedding layer is the highest-value target: expensive to compute, highly cacheable.
+
+## The problem
+
+Every embedding API call costs ~500 ms and money. Without a cache, identical or near-identical queries each pay that cost. With one, repeated queries return in single-digit milliseconds from Redis.
+
+## Two cache levels
+
+**Exact match** — hash the normalized query string. On a hit, return the stored embedding immediately.
+- Key: `sha256(normalize(query))`, O(1) lookup
+
+**Semantic match** — if exact misses, compare the query embedding against stored embeddings via cosine similarity. Return the closest match if it exceeds a threshold.
+- Cost: O(n) scan, threshold default 0.97
+- Covers natural-language variation: "how to reset my password" ≈ "steps to reset password"
+
+## Flow
+
+```mermaid
+%%{init: {
+    "theme": "base",
+    "themeVariables": {
+        "fontFamily": "Geist, ui-sans-serif, system-ui, sans-serif",
+        "fontSize": "14px",
+        "background": "#0b1220",
+        "lineColor": "#64748b",
+        "textColor": "#e5edf7",
+        "primaryTextColor": "#e5edf7",
+        "edgeLabelBackground": "#0b1220"
+    },
+    "flowchart": {
+        "curve": "basis",
+        "htmlLabels": true,
+        "nodeSpacing": 34,
+        "rankSpacing": 58,
+        "padding": 18
+    }
+}}%%
+flowchart TB
+    client("<b>Client</b><br/>query request")
+    exact("<b>Exact cache</b><br/>sha256 key lookup")
+    semantic("<b>Semantic cache</b><br/>cosine similarity scan")
+    api("<b>Embedding API</b><br/>$$$ per call — slow")
+    store("<b>Redis</b><br/>embedding results<br/>TTL-based expiry")
+
+    client --> exact
+    exact -->|HIT – instant| client
+    exact -->|MISS| semantic
+    semantic -->|HIT – instant| client
+    semantic -->|MISS| api
+    api --> store
+    store -->|stored| client
+
+    classDef defaultNode fill:#182235,stroke:#64748b,stroke-width:1.5px,color:#e5edf7
+    classDef cacheNode fill:#111827,stroke:#60a5fa,stroke-width:1.5px,color:#dbeafe
+    classDef focusNode fill:#2563eb,stroke:#93c5fd,stroke-width:2px,color:#ffffff
+    classDef costNode fill:#3b1d5c,stroke:#a78bfa,stroke-width:1.75px,color:#ede9fe
+
+    class client defaultNode
+    class exact,semantic cacheNode
+    class store focusNode
+    class api costNode
+
+    linkStyle 1,3 stroke:#22c55e,stroke-width:2px
+    linkStyle 2,4 stroke:#f59e0b,stroke-width:1.5px,stroke-dasharray:4 3
+    linkStyle 5,6 stroke:#60a5fa,stroke-width:2px
+```
+
+## Local config
+
+| Setting | Default | Purpose |
+| --- | ---: | --- |
+| Embedding API latency | 500 ms | Simulates a real API call |
+| Cache TTL | 3600 s | Entries expire after one hour |
+| Semantic similarity threshold | 0.97 | Minimum cosine similarity for a hit |
+| Embedding dimensions | 8 | Small for easy inspection |
+
+## Run locally
+
+```bash
+docker compose up --build
+```
+
+```bash
+# Cache miss
+curl -s -X POST http://localhost:8081/v1/embeddings \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "how to reset my password"}' | python3 -m json.tool
+
+# Exact hit (repeat same query)
+curl -s -X POST http://localhost:8081/v1/embeddings \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "how to reset my password"}' | python3 -m json.tool
+
+# Semantic hit (similar wording)
+curl -s -X POST http://localhost:8081/v1/embeddings \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "steps to reset password"}' | python3 -m json.tool
+
+# Stats
+curl -s http://localhost:8081/cache/stats | python3 -m json.tool
+
+# Inspect Redis
+docker compose exec redis redis-cli KEYS 'cache:*'
+docker compose exec redis redis-cli SMEMBERS cache:semantic:index
+
+# Reset
+curl -X DELETE http://localhost:8081/cache
+```
+
+## Files
+
+| File | Contents |
+| --- | --- |
+| `1_architecture.md` | Local request flow and component responsibilities |
+| `2_architecture_scaled.md` | Production-scale design with vector DBs and distributed caches |
+| `3_terminology.md` | Key caching terms |
+| `4_detailed_concepts.md` | TTL strategy, eviction policies, failure modes |
+| `5_worked_example.ipynb` | Walkthrough: misses, hits, Redis inspection, hit-rate measurement |
+| `app/gateway.py` | Two-level cache check with fallthrough to embedding API |
+| `app/embedding_service.py` | Mock embedding API with configurable latency |
+| `docker-compose.yml` | Gateway + mock service + Redis |
+
+## Further reading
+
+- [System Design for AI Engineers: 7 patterns](https://jamwithai.substack.com/p/system-design-for-ai-engineers-7)
+- [Redis caching patterns](https://redis.io/redis-best-practices/introduction/)
+- [GPTCache — open-source semantic cache for LLMs](https://github.com/zilliztech/GPTCache)
